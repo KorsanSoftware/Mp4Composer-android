@@ -57,7 +57,6 @@ public abstract class GlOverlayFilter extends GlFilter implements IResolutionFil
 
     private void createBitmap() {
         if (bitmap == null || bitmap.getWidth() != inputResolution.width() || bitmap.getHeight() != inputResolution.height()) {
-            // BitmapUtil.releaseBitmap(bitmap);
             bitmap = Bitmap.createBitmap(inputResolution.width(), inputResolution.height(), Bitmap.Config.ARGB_8888);
         }
     }

@@ -53,7 +53,6 @@ public class GlFilter {
     public GlFilter(final String vertexShaderSource, final String fragmentShaderSource) {
         this.vertexShaderSource = vertexShaderSource;
         this.fragmentShaderSource = fragmentShaderSource;
-
         triangleVertices = ByteBuffer.allocateDirect(
                 triangleVerticesData.length * FLOAT_SIZE_BYTES)
                 .order(ByteOrder.nativeOrder()).asFloatBuffer();
@@ -68,7 +67,6 @@ public class GlFilter {
 
     public void draw(SurfaceTexture surfaceTexture, float[] STMatrix, float[] MVPMatrix) {
         GlUtils.checkGlError("onDrawFrame start");
-
 
         GLES20.glClearColor(clearColor[0], clearColor[1], clearColor[2], clearColor[3]);
         GLES20.glClear(GLES20.GL_DEPTH_BUFFER_BIT | GLES20.GL_COLOR_BUFFER_BIT);

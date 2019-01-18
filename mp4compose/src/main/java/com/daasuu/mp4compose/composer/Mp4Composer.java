@@ -38,6 +38,8 @@ public class Mp4Composer {
     private int timeScale = 1;
     private boolean flipVertical = false;
     private boolean flipHorizontal = false;
+    private int frameRate = 30;
+    private int keyframeInterval = 1;
 
     private ExecutorService executorService;
 
@@ -47,8 +49,20 @@ public class Mp4Composer {
         this.destPath = destPath;
     }
 
+    public Mp4Composer frameRate(int frameRate)
+    {
+        this.frameRate = frameRate;
+        return this;
+    }
+
     public Mp4Composer filter(GlFilter filter) {
         this.filter = filter;
+        return this;
+    }
+
+    public Mp4Composer keyFrameInterval(int interval)
+    {
+        this.keyframeInterval = interval;
         return this;
     }
 
@@ -117,7 +131,6 @@ public class Mp4Composer {
             @Override
             public void run() {
                 Mp4ComposerEngine engine = new Mp4ComposerEngine();
-
                 engine.setProgressCallback(new Mp4ComposerEngine.ProgressCallback() {
                     @Override
                     public void onProgress(final double progress) {
@@ -205,7 +218,9 @@ public class Mp4Composer {
                             fillModeCustomItem,
                             timeScale,
                             flipVertical,
-                            flipHorizontal
+                            flipHorizontal,
+                            frameRate,
+                            keyframeInterval
                     );
 
                 } catch (Exception e) {
@@ -294,7 +309,6 @@ public class Mp4Composer {
             retriever.setDataSource(path);
             int width = Integer.valueOf(retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH));
             int height = Integer.valueOf(retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT));
-
             return new Resolution(width, height);
         } finally {
             try {

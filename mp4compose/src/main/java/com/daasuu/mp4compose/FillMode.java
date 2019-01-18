@@ -17,16 +17,13 @@ public enum FillMode {
             widthIn = heightIn;
             heightIn = cx;
         }
-
         float aspectRatioIn = (float) widthIn / (float) heightIn;
         float heightOutCalculated = (float) widthOut / aspectRatioIn;
-
         if (heightOutCalculated < heightOut) {
             scale[1] = heightOutCalculated / heightOut;
         } else {
             scale[0] = heightOut * aspectRatioIn / widthOut;
         }
-
         return scale;
     }
 
@@ -38,10 +35,8 @@ public enum FillMode {
             widthIn = heightIn;
             heightIn = cx;
         }
-
         float aspectRatioIn = (float) widthIn / (float) heightIn;
         float aspectRatioOut = (float) widthOut / (float) heightOut;
-
         if (aspectRatioIn > aspectRatioOut) {
             float widthOutCalculated = (float) heightOut * aspectRatioIn;
             scale[0] = widthOutCalculated / widthOut;
@@ -49,7 +44,6 @@ public enum FillMode {
             float heightOutCalculated = (float) widthOut / aspectRatioIn;
             scale[1] = heightOutCalculated / heightOut;
         }
-
         return scale;
     }
 }

@@ -57,7 +57,9 @@ class Mp4ComposerEngine {
             final FillModeCustomItem fillModeCustomItem,
             final int timeScale,
             final boolean flipVertical,
-            final boolean flipHorizontal
+            final boolean flipHorizontal,
+            final int frameRate,
+            final int keyFrameInterval
     ) throws IOException {
 
 
@@ -77,10 +79,9 @@ class Mp4ComposerEngine {
             MediaFormat videoOutputFormat = MediaFormat.createVideoFormat("video/avc", outputResolution.width(), outputResolution.height());
 
             videoOutputFormat.setInteger(MediaFormat.KEY_BIT_RATE, bitrate);
-            videoOutputFormat.setInteger(MediaFormat.KEY_FRAME_RATE, 30);
-            videoOutputFormat.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1);
+            videoOutputFormat.setInteger(MediaFormat.KEY_FRAME_RATE, frameRate); //30
+            videoOutputFormat.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, keyFrameInterval); // 1
             videoOutputFormat.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
-
 
             MuxRender muxRender = new MuxRender(mediaMuxer);
 

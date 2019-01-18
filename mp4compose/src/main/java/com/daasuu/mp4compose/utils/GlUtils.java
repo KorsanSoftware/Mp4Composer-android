@@ -35,10 +35,8 @@ public class GlUtils {
         if (program == 0) {
             throw new RuntimeException("Could not create program");
         }
-
         GLES20.glAttachShader(program, vertexShader);
         GLES20.glAttachShader(program, pixelShader);
-
         GLES20.glLinkProgram(program);
         final int[] linkStatus = new int[1];
         GLES20.glGetProgramiv(program, GLES20.GL_LINK_STATUS, linkStatus, 0);
