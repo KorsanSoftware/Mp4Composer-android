@@ -4,7 +4,10 @@ import android.media.MediaCodec;
 import android.media.MediaExtractor;
 import android.media.MediaFormat;
 
+import com.daasuu.mp4compose.SampleType;
+
 import java.io.IOException;
+import java.util.concurrent.TimeUnit;
 
 // Refer:  https://github.com/ypresto/android-transcoder/blob/master/lib/src/main/java/net/ypresto/androidtranscoder/engine/AudioTrackTranscoder.java
 
@@ -13,7 +16,7 @@ import java.io.IOException;
  */
 
 class RemixAudioComposer implements IAudioComposer {
-    private static final MuxRender.SampleType SAMPLE_TYPE = MuxRender.SampleType.AUDIO;
+    private static final SampleType SAMPLE_TYPE = SampleType.AUDIO;
 
     private static final int DRAIN_STATE_NONE = 0;
     private static final int DRAIN_STATE_SHOULD_RETRY_IMMEDIATELY = 1;
@@ -33,9 +36,6 @@ class RemixAudioComposer implements IAudioComposer {
     private MediaCodec encoder;
     private MediaFormat actualOutputFormat;
 
-    private MediaCodecBufferCompatWrapper decoderBuffers;
-    private MediaCodecBufferCompatWrapper encoderBuffers;
-
     private boolean isExtractorEOS;
     private boolean isDecoderEOS;
     private boolean isEncoderEOS;
@@ -45,13 +45,24 @@ class RemixAudioComposer implements IAudioComposer {
     private AudioChannel audioChannel;
     private final int timeScale;
 
+    private final long trimStartUs;
+    private final long trimEndUs;
+
+    // Used for AAC priming offset.
+    private boolean addPrimingDelay;
+    private int frameCounter;
+    private long primingDelay;
+
     public RemixAudioComposer(MediaExtractor extractor, int trackIndex,
-                              MediaFormat outputFormat, MuxRender muxer, int timeScale) {
+                              MediaFormat outputFormat, MuxRender muxer, int timeScale,
+                              long trimStartMs, long trimEndMs) {
         this.extractor = extractor;
         this.trackIndex = trackIndex;
         this.outputFormat = outputFormat;
         this.muxer = muxer;
         this.timeScale = timeScale;
+        this.trimStartUs = TimeUnit.MILLISECONDS.toMicros(trimStartMs);
+        this.trimEndUs = trimEndMs == -1 ? trimEndMs : TimeUnit.MILLISECONDS.toMicros(trimEndMs);
     }
 
     @Override
@@ -65,7 +76,6 @@ class RemixAudioComposer implements IAudioComposer {
         encoder.configure(outputFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
         encoder.start();
         encoderStarted = true;
-        encoderBuffers = new MediaCodecBufferCompatWrapper(encoder);
 
         final MediaFormat inputFormat = extractor.getTrackFormat(trackIndex);
         try {
@@ -76,7 +86,6 @@ class RemixAudioComposer implements IAudioComposer {
         decoder.configure(inputFormat, null, null, 0);
         decoder.start();
         decoderStarted = true;
-        decoderBuffers = new MediaCodecBufferCompatWrapper(decoder);
 
         audioChannel = new AudioChannel(decoder, encoder, outputFormat);
     }
@@ -114,9 +123,9 @@ class RemixAudioComposer implements IAudioComposer {
             return DRAIN_STATE_NONE;
         }
 
-        final int sampleSize = extractor.readSampleData(decoderBuffers.getInputBuffer(result), 0);
+        final int sampleSize = extractor.readSampleData(decoder.getInputBuffer(result), 0);
         final boolean isKeyFrame = (extractor.getSampleFlags() & MediaExtractor.SAMPLE_FLAG_SYNC) != 0;
-        decoder.queueInputBuffer(result, 0, sampleSize, extractor.getSampleTime(), isKeyFrame ? MediaCodec.BUFFER_FLAG_SYNC_FRAME : 0);
+        decoder.queueInputBuffer(result, 0, sampleSize, extractor.getSampleTime(), isKeyFrame ? MediaCodec.BUFFER_FLAG_KEY_FRAME : 0);
         extractor.advance();
         return DRAIN_STATE_CONSUMED;
     }
@@ -156,10 +165,10 @@ class RemixAudioComposer implements IAudioComposer {
                     throw new RuntimeException("Audio output format changed twice.");
                 }
                 actualOutputFormat = encoder.getOutputFormat();
+                addPrimingDelay = MediaFormat.MIMETYPE_AUDIO_AAC.equals(actualOutputFormat.getString(MediaFormat.KEY_MIME));
                 muxer.setOutputFormat(SAMPLE_TYPE, actualOutputFormat);
                 return DRAIN_STATE_SHOULD_RETRY_IMMEDIATELY;
             case MediaCodec.INFO_OUTPUT_BUFFERS_CHANGED:
-                encoderBuffers = new MediaCodecBufferCompatWrapper(encoder);
                 return DRAIN_STATE_SHOULD_RETRY_IMMEDIATELY;
         }
 
@@ -167,7 +176,7 @@ class RemixAudioComposer implements IAudioComposer {
             throw new RuntimeException("Could not determine actual output format.");
         }
 
-        if ((bufferInfo.flags & MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
+        if ((bufferInfo.flags & MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0 || (bufferInfo.presentationTimeUs > trimEndUs && trimEndUs == -1)) {
             isEncoderEOS = true;
             bufferInfo.set(0, 0, 0, bufferInfo.flags);
         }
@@ -177,16 +186,27 @@ class RemixAudioComposer implements IAudioComposer {
             return DRAIN_STATE_SHOULD_RETRY_IMMEDIATELY;
         }
 
-        if (muxCount == 1) {
-            muxer.writeSampleData(SAMPLE_TYPE, encoderBuffers.getOutputBuffer(result), bufferInfo);
-        }
-        if (muxCount < timeScale) {
-            muxCount++;
-        } else {
-            muxCount = 1;
+        writtenPresentationTimeUs = bufferInfo.presentationTimeUs;
+
+        if (frameCounter < 3 && addPrimingDelay) {
+            // For AAC, a priming delay of 2112 samples, ~2 frames should be added.
+            // The audio should be offset by two frames, and the third frame should be at time zero.
+            frameCounter++;
+            primingDelay = bufferInfo.presentationTimeUs;
         }
 
-        writtenPresentationTimeUs = bufferInfo.presentationTimeUs;
+        if (muxCount == 1
+                && bufferInfo.presentationTimeUs >= trimStartUs
+                && (bufferInfo.presentationTimeUs <= trimEndUs || trimEndUs == -1)) {
+            if (frameCounter == 3 || !addPrimingDelay) {
+                // For AAC, drop the first two frames.
+                if (!isEncoderEOS) {
+                    bufferInfo.presentationTimeUs = bufferInfo.presentationTimeUs - primingDelay;
+                }
+                muxer.writeSampleData(SAMPLE_TYPE, encoder.getOutputBuffer(result), bufferInfo);
+            }
+        }
+
         encoder.releaseOutputBuffer(result, false);
         return DRAIN_STATE_CONSUMED;
     }
